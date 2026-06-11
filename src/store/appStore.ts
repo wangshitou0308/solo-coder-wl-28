@@ -2,12 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface EmergencyContact {
+  id: string;
   name: string;
   phone: string;
   relationship: string;
 }
 
 interface HelperInfo {
+  id: string;
   name: string;
   phone: string;
   relationship: string;
@@ -39,10 +41,10 @@ interface AppState {
   progress: UserProgress;
   setFontSize: (size: "normal" | "large" | "xlarge") => void;
   toggleVoice: () => void;
-  addEmergencyContact: (contact: EmergencyContact) => void;
-  removeEmergencyContact: (phone: string) => void;
-  addHelper: (helper: HelperInfo) => void;
-  removeHelper: (phone: string) => void;
+  addEmergencyContact: (contact: Omit<EmergencyContact, "id">) => void;
+  removeEmergencyContact: (id: string) => void;
+  addHelper: (helper: Omit<HelperInfo, "id">) => void;
+  removeHelper: (id: string) => void;
   completeTutorial: (tutorialId: string) => void;
   setCurrentTutorial: (tutorialId: string | null, step?: number) => void;
   addStudyMinutes: (minutes: number) => void;
@@ -61,14 +63,16 @@ const initialProgress: UserProgress = {
   streakDays: 0,
 };
 
+const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       fontSize: "large",
       voiceEnabled: true,
       emergencyContacts: [
-        { name: "儿子", phone: "13800138000", relationship: "儿子" },
-        { name: "女儿", phone: "13900139000", relationship: "女儿" },
+        { id: generateId(), name: "儿子", phone: "13800138000", relationship: "儿子" },
+        { id: generateId(), name: "女儿", phone: "13900139000", relationship: "女儿" },
       ],
       helpers: [],
       customTutorials: [],
@@ -81,22 +85,22 @@ export const useAppStore = create<AppState>()(
 
       addEmergencyContact: (contact) =>
         set((state) => ({
-          emergencyContacts: [...state.emergencyContacts, contact],
+          emergencyContacts: [...state.emergencyContacts, { id: generateId(), ...contact }],
         })),
 
-      removeEmergencyContact: (phone) =>
+      removeEmergencyContact: (id) =>
         set((state) => ({
-          emergencyContacts: state.emergencyContacts.filter((c) => c.phone !== phone),
+          emergencyContacts: state.emergencyContacts.filter((c) => c.id !== id),
         })),
 
       addHelper: (helper) =>
         set((state) => ({
-          helpers: [...state.helpers, helper],
+          helpers: [...state.helpers, { id: generateId(), ...helper }],
         })),
 
-      removeHelper: (phone) =>
+      removeHelper: (id) =>
         set((state) => ({
-          helpers: state.helpers.filter((h) => h.phone !== phone),
+          helpers: state.helpers.filter((h) => h.id !== id),
         })),
 
       completeTutorial: (tutorialId) =>

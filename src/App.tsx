@@ -6,6 +6,7 @@ import TutorialDetail from "@/pages/TutorialDetail";
 import AntiFraud from "@/pages/AntiFraud";
 import AntiFraudDetail from "@/pages/AntiFraudDetail";
 import Helpers from "@/pages/Helpers";
+import Settings from "@/pages/Settings";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/anti-fraud" element={<AntiFraud />} />
         <Route path="/anti-fraud/:scamId" element={<AntiFraudDetail />} />
         <Route path="/helpers" element={<Helpers />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Router>
   );

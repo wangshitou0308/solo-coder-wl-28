@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -57,6 +57,7 @@ export default function TutorialDetail() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     if (tutorial && progress.currentTutorial === tutorialId) {
@@ -75,6 +76,21 @@ export default function TutorialDetail() {
       window.speechSynthesis?.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    if (voiceEnabled && hasStarted && tutorial) {
+      const step = tutorial.steps[currentStep];
+      if (step) {
+        const text = `${step.title}。${step.description}${step.tip ? `小贴士：${step.tip}` : ""}`;
+        speak(text);
+      }
+    }
+  }, [currentStep]);
 
   if (!tutorial || !category) {
     return (
@@ -110,16 +126,17 @@ export default function TutorialDetail() {
 
   const handleNext = () => {
     stopSpeaking();
+    
     if (isLastStep) {
+      if (isCompleted) {
+        setCurrentStep(0);
+        setHasStarted(true);
+        return;
+      }
       handleComplete();
     } else {
       if (!hasStarted) setHasStarted(true);
       setCurrentStep(currentStep + 1);
-      setTimeout(() => {
-        if (voiceEnabled) {
-          speak(step.description);
-        }
-      }, 300);
     }
   };
 
@@ -146,7 +163,8 @@ export default function TutorialDetail() {
     if (isSpeaking) {
       stopSpeaking();
     } else {
-      speak(`${step.title}。${step.description}${step.tip ? `小贴士：${step.tip}` : ""}`);
+      const text = `${step.title}。${step.description}${step.tip ? `小贴士：${step.tip}` : ""}`;
+      speak(text);
     }
   };
 
@@ -321,15 +339,24 @@ export default function TutorialDetail() {
             onClick={handleNext}
             className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-xl text-white transition-all active:scale-95 ${
               isLastStep
-                ? "bg-green-500 hover:bg-green-600"
+                ? isCompleted
+                  ? "bg-blue-500 hover:bg-blue-600"
+                  : "bg-green-500 hover:bg-green-600"
                 : `${category.color} hover:opacity-90`
             }`}
           >
             {isLastStep ? (
-              <>
-                <Check className="w-7 h-7" />
-                {isCompleted ? "重新学习" : "完成学习"}
-              </>
+              isCompleted ? (
+                <>
+                  <BookOpen className="w-7 h-7" />
+                  重新学习
+                </>
+              ) : (
+                <>
+                  <Check className="w-7 h-7" />
+                  完成学习
+                </>
+              )
             ) : (
               <>
                 下一步

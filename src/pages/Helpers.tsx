@@ -135,7 +135,13 @@ export default function Helpers() {
                 </div>
               </div>
               <button
-                onClick={() => emergencyContacts.length > 0 && handleCall(emergencyContacts[0].phone)}
+                onClick={() => {
+                  if (emergencyContacts.length > 0) {
+                    handleCall(emergencyContacts[0].phone);
+                  } else {
+                    setShowAddContact(true);
+                  }
+                }}
                 className="w-full bg-white text-red-600 font-bold text-2xl py-5 rounded-xl hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-3"
               >
                 <Phone className="w-8 h-8" />
@@ -171,9 +177,9 @@ export default function Helpers() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {emergencyContacts.map((contact, index) => (
+                  {emergencyContacts.map((contact) => (
                     <div
-                      key={index}
+                      key={contact.id}
                       className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl"
                     >
                       <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white">
@@ -196,7 +202,7 @@ export default function Helpers() {
                           <Phone className="w-6 h-6" />
                         </button>
                         <button
-                          onClick={() => removeEmergencyContact(contact.phone)}
+                          onClick={() => removeEmergencyContact(contact.id)}
                           className="bg-red-100 text-red-500 p-3 rounded-xl hover:bg-red-200 transition-colors"
                         >
                           <Trash2 className="w-6 h-6" />
@@ -236,9 +242,9 @@ export default function Helpers() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {helpers.map((helper, index) => (
+                  {helpers.map((helper) => (
                     <div
-                      key={index}
+                      key={helper.id}
                       className="flex items-center gap-4 p-4 bg-purple-50 rounded-xl"
                     >
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white">
@@ -251,7 +257,7 @@ export default function Helpers() {
                         <p className="text-gray-500 text-base">{helper.relationship}</p>
                       </div>
                       <button
-                        onClick={() => removeHelper(helper.phone)}
+                        onClick={() => removeHelper(helper.id)}
                         className="text-red-400 hover:text-red-600 p-2"
                       >
                         <Trash2 className="w-5 h-5" />
