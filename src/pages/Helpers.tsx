@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,10 +15,37 @@ import {
   Upload,
   FileText,
   AlertCircle,
+  Volume2,
+  Play,
+  Square,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { tutorials, tutorialCategories } from "@/data/tutorials";
 import { scamQuestions } from "@/data/scams";
+import { useVoice } from "@/hooks/useVoice";
+
+interface StepForm {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  whatIfStuck: string;
+  whatIfWrong: string;
+  howToConfirm: string;
+}
+
+const createEmptyStep = (): StepForm => ({
+  id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  title: "",
+  description: "",
+  image: "",
+  whatIfStuck: "",
+  whatIfWrong: "",
+  howToConfirm: "",
+});
 
 export default function Helpers() {
   const navigate = useNavigate();
@@ -32,22 +59,38 @@ export default function Helpers() {
     addHelper,
     removeHelper,
     addCustomTutorial,
+    removeCustomTutorial,
     fontSize,
   } = useAppStore();
+
+  const { isSpeaking, speakSegments, stop } = useVoice();
 
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddHelper, setShowAddHelper] = useState(false);
   const [showAddTutorial, setShowAddTutorial] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "", relationship: "" });
   const [newHelper, setNewHelper] = useState({ name: "", phone: "", relationship: "" });
-  const [newTutorial, setNewTutorial] = useState({ title: "", description: "", content: "" });
+  const [newTutorial, setNewTutorial] = useState({
+    title: "",
+    description: "",
+    categoryId: "",
+    steps: [createEmptyStep()] as StepForm[],
+  });
   const [activeTab, setActiveTab] = useState<"contacts" | "progress" | "custom">("contacts");
+  const [expandedTutorialId, setExpandedTutorialId] = useState<string | null>(null);
+  const [speakingTutorialId, setSpeakingTutorialId] = useState<string | null>(null);
 
   const completedTutorialsCount = progress.completedTutorials.length;
   const totalTutorials = tutorials.length;
   const completedScamsCount = progress.completedScamLevels.length;
   const totalScams = scamQuestions.length;
   const totalScore = Object.values(progress.scamScores).reduce((sum, score) => sum + score, 0);
+
+  useEffect(() => {
+    if (!isSpeaking && speakingTutorialId) {
+      setSpeakingTutorialId(null);
+    }
+  }, [isSpeaking, speakingTutorialId]);
 
   const handleAddContact = () => {
     if (newContact.name && newContact.phone) {
@@ -65,16 +108,78 @@ export default function Helpers() {
     }
   };
 
+  const updateStep = (stepId: string, field: keyof StepForm, value: string) => {
+    setNewTutorial((prev) => ({
+      ...prev,
+      steps: prev.steps.map((s) => (s.id === stepId ? { ...s, [field]: value } : s)),
+    }));
+  };
+
+  const addStep = () => {
+    setNewTutorial((prev) => ({
+      ...prev,
+      steps: [...prev.steps, createEmptyStep()],
+    }));
+  };
+
+  const removeStep = (stepId: string) => {
+    setNewTutorial((prev) => ({
+      ...prev,
+      steps: prev.steps.length > 1 ? prev.steps.filter((s) => s.id !== stepId) : prev.steps,
+    }));
+  };
+
   const handleAddTutorial = () => {
-    if (newTutorial.title && newTutorial.content) {
-      addCustomTutorial(newTutorial);
-      setNewTutorial({ title: "", description: "", content: "" });
+    if (newTutorial.title) {
+      const steps = newTutorial.steps
+        .filter((s) => s.title.trim() || s.description.trim())
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          ...(s.image.trim() ? { image: s.image.trim() } : {}),
+          ...(s.whatIfStuck.trim() ? { whatIfStuck: s.whatIfStuck.trim() } : {}),
+          ...(s.whatIfWrong.trim() ? { whatIfWrong: s.whatIfWrong.trim() } : {}),
+          ...(s.howToConfirm.trim() ? { howToConfirm: s.howToConfirm.trim() } : {}),
+        }));
+      addCustomTutorial({
+        title: newTutorial.title,
+        description: newTutorial.description,
+        categoryId: newTutorial.categoryId || "custom",
+        steps,
+      });
+      setNewTutorial({
+        title: "",
+        description: "",
+        categoryId: "",
+        steps: [createEmptyStep()],
+      });
       setShowAddTutorial(false);
     }
   };
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  const handleReadAloud = (tutorial: (typeof customTutorials)[number]) => {
+    if (isSpeaking && speakingTutorialId === tutorial.id) {
+      stop();
+      setSpeakingTutorialId(null);
+    } else {
+      const segments = [
+        `${tutorial.title}. ${tutorial.description}`,
+        ...tutorial.steps.map((step, i) => {
+          let text = `第${i + 1}步: ${step.title}. ${step.description}`;
+          if (step.whatIfStuck) text += `. 如果卡住了: ${step.whatIfStuck}`;
+          if (step.whatIfWrong) text += `. 如果出错了: ${step.whatIfWrong}`;
+          if (step.howToConfirm) text += `. 确认方法: ${step.howToConfirm}`;
+          return text;
+        }),
+      ];
+      speakSegments(segments);
+      setSpeakingTutorialId(tutorial.id);
+    }
   };
 
   const textSizeClass = fontSize === "xlarge" ? "text-xl" : fontSize === "large" ? "text-lg" : "text-base";
@@ -91,7 +196,7 @@ export default function Helpers() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
-            className="p-2 -ml-2 hover:bg-white/20 rounded-xl transition-colors"
+            className="p-2 -ml-2 hover:bg-white/20 rounded-xl transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
           >
             <ArrowLeft className="w-7 h-7" />
           </button>
@@ -108,7 +213,7 @@ export default function Helpers() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex-1 flex items-center justify-center gap-2 py-4 font-bold text-lg transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-4 font-bold text-lg transition-all min-h-[48px] ${
                 activeTab === tab.id
                   ? "text-green-600 border-b-4 border-green-500"
                   : "text-gray-500 hover:text-gray-700"
@@ -142,11 +247,11 @@ export default function Helpers() {
                     setShowAddContact(true);
                   }
                 }}
-                className="w-full bg-white text-red-600 font-bold text-2xl py-5 rounded-xl hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-3"
+                className="w-full bg-white text-red-600 font-bold text-2xl py-5 rounded-xl hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-3 min-h-[56px]"
               >
                 <Phone className="w-8 h-8" />
-                {emergencyContacts.length > 0 
-                  ? `呼叫 ${emergencyContacts[0].name}` 
+                {emergencyContacts.length > 0
+                  ? `呼叫 ${emergencyContacts[0].name}`
                   : "添加紧急联系人"}
               </button>
             </div>
@@ -163,7 +268,7 @@ export default function Helpers() {
                 </div>
                 <button
                   onClick={() => setShowAddContact(true)}
-                  className="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors"
+                  className="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                 >
                   <Plus className="w-6 h-6" />
                 </button>
@@ -197,13 +302,13 @@ export default function Helpers() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleCall(contact.phone)}
-                          className="bg-green-500 text-white p-3 rounded-xl hover:bg-green-600 transition-colors"
+                          className="bg-green-500 text-white p-3 rounded-xl hover:bg-green-600 transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                         >
                           <Phone className="w-6 h-6" />
                         </button>
                         <button
                           onClick={() => removeEmergencyContact(contact.id)}
-                          className="bg-red-100 text-red-500 p-3 rounded-xl hover:bg-red-200 transition-colors"
+                          className="bg-red-100 text-red-500 p-3 rounded-xl hover:bg-red-200 transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                         >
                           <Trash2 className="w-6 h-6" />
                         </button>
@@ -226,7 +331,7 @@ export default function Helpers() {
                 </div>
                 <button
                   onClick={() => setShowAddHelper(true)}
-                  className="bg-purple-500 text-white p-3 rounded-xl hover:bg-purple-600 transition-colors"
+                  className="bg-purple-500 text-white p-3 rounded-xl hover:bg-purple-600 transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                 >
                   <Plus className="w-6 h-6" />
                 </button>
@@ -258,7 +363,7 @@ export default function Helpers() {
                       </div>
                       <button
                         onClick={() => removeHelper(helper.id)}
-                        className="text-red-400 hover:text-red-600 p-2"
+                        className="text-red-400 hover:text-red-600 p-3 min-h-[48px] min-w-[48px] flex items-center justify-center"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -459,7 +564,7 @@ export default function Helpers() {
                 </div>
                 <button
                   onClick={() => setShowAddTutorial(true)}
-                  className="bg-teal-500 text-white p-3 rounded-xl hover:bg-teal-600 transition-colors flex items-center gap-2"
+                  className="bg-teal-500 text-white p-3 rounded-xl hover:bg-teal-600 transition-colors flex items-center gap-2 min-h-[48px]"
                 >
                   <Upload className="w-5 h-5" />
                   <span className="font-semibold">上传</span>
@@ -475,23 +580,134 @@ export default function Helpers() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {customTutorials.map((tutorial) => (
-                    <div
-                      key={tutorial.id}
-                      className="p-4 bg-teal-50 rounded-xl border border-teal-100"
-                    >
-                      <h3 className="text-lg font-bold text-gray-800 mb-1">
-                        {tutorial.title}
-                      </h3>
-                      <p className="text-gray-500 text-base mb-3">
-                        {tutorial.description}
-                      </p>
-                      <p className={`${textSizeClass} text-gray-700 whitespace-pre-wrap`}>
-                        {tutorial.content}
-                      </p>
-                    </div>
-                  ))}
+                <div className="space-y-4">
+                  {customTutorials.map((tutorial) => {
+                    const isExpanded = expandedTutorialId === tutorial.id;
+                    const isSpeakingThis = isSpeaking && speakingTutorialId === tutorial.id;
+                    const category = tutorialCategories.find((c) => c.id === tutorial.categoryId);
+
+                    return (
+                      <div
+                        key={tutorial.id}
+                        className="rounded-xl border border-teal-100 overflow-hidden bg-teal-50"
+                      >
+                        <div
+                          className="p-4 cursor-pointer"
+                          onClick={() => setExpandedTutorialId(isExpanded ? null : tutorial.id)}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h3 className="text-lg font-bold text-gray-800">
+                                  {tutorial.title}
+                                </h3>
+                                {category && (
+                                  <span className={`${category.color} text-white text-xs px-2 py-0.5 rounded-full`}>
+                                    {category.name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-gray-500 text-base">
+                                {tutorial.description}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReadAloud(tutorial);
+                                }}
+                                className={`flex items-center justify-center gap-1 px-3 py-2 rounded-xl font-bold text-base min-h-[48px] transition-all ${
+                                  isSpeakingThis
+                                    ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                    : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                                }`}
+                              >
+                                {isSpeakingThis ? (
+                                  <Square className="w-5 h-5" />
+                                ) : (
+                                  <Volume2 className="w-5 h-5" />
+                                )}
+                                {isSpeakingThis ? "停止" : "朗读"}
+                              </button>
+                              <div className="text-gray-400">
+                                {isExpanded ? (
+                                  <ChevronUp className="w-6 h-6" />
+                                ) : (
+                                  <ChevronDown className="w-6 h-6" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="px-4 pb-4 space-y-3">
+                            {tutorial.steps.length > 0 ? (
+                              tutorial.steps.map((step, index) => (
+                                <div
+                                  key={step.id}
+                                  className="bg-white rounded-xl p-4 border border-gray-100"
+                                >
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                      {index + 1}
+                                    </div>
+                                    <h4 className="text-lg font-bold text-gray-800">
+                                      {step.title}
+                                    </h4>
+                                  </div>
+                                  <p className={`${textSizeClass} text-gray-700 mb-2`}>
+                                    {step.description}
+                                  </p>
+                                  {step.image && (
+                                    <img
+                                      src={step.image}
+                                      alt={step.title}
+                                      className="w-full rounded-lg border border-gray-200 mb-2 max-h-48 object-cover"
+                                    />
+                                  )}
+                                  {(step.whatIfStuck || step.whatIfWrong || step.howToConfirm) && (
+                                    <div className="space-y-2 mt-3">
+                                      {step.whatIfStuck && (
+                                        <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+                                          <p className="text-sm font-semibold text-yellow-800 mb-0.5">卡住了怎么办</p>
+                                          <p className="text-sm text-yellow-700">{step.whatIfStuck}</p>
+                                        </div>
+                                      )}
+                                      {step.whatIfWrong && (
+                                        <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                                          <p className="text-sm font-semibold text-red-800 mb-0.5">出错了怎么办</p>
+                                          <p className="text-sm text-red-700">{step.whatIfWrong}</p>
+                                        </div>
+                                      )}
+                                      {step.howToConfirm && (
+                                        <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                                          <p className="text-sm font-semibold text-green-800 mb-0.5">如何确认完成</p>
+                                          <p className="text-sm text-green-700">{step.howToConfirm}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-gray-400 text-center py-4">暂无步骤</p>
+                            )}
+                            <div className="flex justify-end pt-2">
+                              <button
+                                onClick={() => removeCustomTutorial(tutorial.id)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors min-h-[48px] font-semibold"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                                删除教程
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -502,6 +718,7 @@ export default function Helpers() {
                 <li>• 可以让子女帮您上传家电使用说明</li>
                 <li>• 可以添加常用APP的操作步骤</li>
                 <li>• 有了自定义教程，忘记了随时看</li>
+                <li>• 点击朗读按钮可以听教程步骤</li>
               </ul>
             </div>
           </div>
@@ -522,7 +739,7 @@ export default function Helpers() {
                   value={newContact.name}
                   onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
                   placeholder="如：儿子"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
@@ -534,7 +751,7 @@ export default function Helpers() {
                   value={newContact.phone}
                   onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
                   placeholder="请输入手机号"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
@@ -546,20 +763,20 @@ export default function Helpers() {
                   value={newContact.relationship}
                   onChange={(e) => setNewContact({ ...newContact, relationship: e.target.value })}
                   placeholder="如：儿子、女儿、老伴"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none min-h-[48px]"
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowAddContact(false)}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors min-h-[56px]"
               >
                 取消
               </button>
               <button
                 onClick={handleAddContact}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors min-h-[56px]"
               >
                 添加
               </button>
@@ -582,7 +799,7 @@ export default function Helpers() {
                   value={newHelper.name}
                   onChange={(e) => setNewHelper({ ...newHelper, name: e.target.value })}
                   placeholder="如：小明"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
@@ -594,7 +811,7 @@ export default function Helpers() {
                   value={newHelper.phone}
                   onChange={(e) => setNewHelper({ ...newHelper, phone: e.target.value })}
                   placeholder="请输入手机号"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
@@ -606,20 +823,20 @@ export default function Helpers() {
                   value={newHelper.relationship}
                   onChange={(e) => setNewHelper({ ...newHelper, relationship: e.target.value })}
                   placeholder="如：儿子、女儿、志愿者"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none min-h-[48px]"
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowAddHelper(false)}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors min-h-[56px]"
               >
                 取消
               </button>
               <button
                 onClick={handleAddHelper}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-purple-500 text-white hover:bg-purple-600 transition-colors min-h-[56px]"
               >
                 添加
               </button>
@@ -631,18 +848,26 @@ export default function Helpers() {
       {showAddTutorial && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">上传自定义教程</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">上传自定义教程</h2>
+              <button
+                onClick={() => setShowAddTutorial(false)}
+                className="p-2 hover:bg-gray-100 rounded-xl transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
+              >
+                <X className="w-6 h-6 text-gray-500" />
+              </button>
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-lg font-semibold text-gray-700 mb-2">
-                  教程标题
+                  教程标题 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={newTutorial.title}
                   onChange={(e) => setNewTutorial({ ...newTutorial, title: e.target.value })}
                   placeholder="如：电饭煲使用说明"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
@@ -654,32 +879,126 @@ export default function Helpers() {
                   value={newTutorial.description}
                   onChange={(e) => setNewTutorial({ ...newTutorial, description: e.target.value })}
                   placeholder="简短描述一下"
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none"
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none min-h-[48px]"
                 />
               </div>
               <div>
                 <label className="block text-lg font-semibold text-gray-700 mb-2">
-                  内容
+                  分类
                 </label>
-                <textarea
-                  value={newTutorial.content}
-                  onChange={(e) => setNewTutorial({ ...newTutorial, content: e.target.value })}
-                  placeholder="详细的使用步骤..."
-                  rows={6}
-                  className="w-full p-4 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none resize-none"
-                />
+                <select
+                  value={newTutorial.categoryId}
+                  onChange={(e) => setNewTutorial({ ...newTutorial, categoryId: e.target.value })}
+                  className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none min-h-[48px] bg-white"
+                >
+                  <option value="">请选择分类</option>
+                  {tutorialCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                  <option value="custom">自定义</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-lg font-semibold text-gray-700">
+                    教程步骤
+                  </label>
+                  <button
+                    onClick={addStep}
+                    className="flex items-center gap-1 px-3 py-2 bg-teal-100 text-teal-700 rounded-xl hover:bg-teal-200 transition-colors font-semibold min-h-[48px]"
+                  >
+                    <Plus className="w-5 h-5" />
+                    添加步骤
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {newTutorial.steps.map((step, stepIndex) => (
+                    <div
+                      key={step.id}
+                      className="bg-gray-50 rounded-xl p-4 border border-gray-200"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-bold text-gray-700 text-lg">
+                          第 {stepIndex + 1} 步
+                        </span>
+                        {newTutorial.steps.length > 1 && (
+                          <button
+                            onClick={() => removeStep(step.id)}
+                            className="flex items-center gap-1 px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors min-h-[48px] font-semibold"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            删除
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={step.title}
+                          onChange={(e) => updateStep(step.id, "title", e.target.value)}
+                          placeholder="步骤标题"
+                          className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none min-h-[48px]"
+                        />
+                        <textarea
+                          value={step.description}
+                          onChange={(e) => updateStep(step.id, "description", e.target.value)}
+                          placeholder="步骤描述"
+                          rows={3}
+                          className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none resize-none min-h-[48px]"
+                        />
+                        <input
+                          type="text"
+                          value={step.image}
+                          onChange={(e) => updateStep(step.id, "image", e.target.value)}
+                          placeholder="图片URL（可选，粘贴图片链接）"
+                          className="w-full p-5 text-xl border-2 border-gray-200 rounded-xl focus:border-teal-500 focus:outline-none min-h-[48px]"
+                        />
+
+                        <div className="space-y-2 pt-2 border-t border-gray-200">
+                          <p className="text-sm font-semibold text-gray-500">可选帮助信息</p>
+                          <input
+                            type="text"
+                            value={step.whatIfStuck}
+                            onChange={(e) => updateStep(step.id, "whatIfStuck", e.target.value)}
+                            placeholder="卡住了怎么办（可选）"
+                            className="w-full p-5 text-xl border-2 border-yellow-200 rounded-xl focus:border-yellow-400 focus:outline-none min-h-[48px]"
+                          />
+                          <input
+                            type="text"
+                            value={step.whatIfWrong}
+                            onChange={(e) => updateStep(step.id, "whatIfWrong", e.target.value)}
+                            placeholder="出错了怎么办（可选）"
+                            className="w-full p-5 text-xl border-2 border-red-200 rounded-xl focus:border-red-400 focus:outline-none min-h-[48px]"
+                          />
+                          <input
+                            type="text"
+                            value={step.howToConfirm}
+                            onChange={(e) => updateStep(step.id, "howToConfirm", e.target.value)}
+                            placeholder="如何确认完成（可选）"
+                            className="w-full p-5 text-xl border-2 border-green-200 rounded-xl focus:border-green-400 focus:outline-none min-h-[48px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowAddTutorial(false)}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors min-h-[56px]"
               >
                 取消
               </button>
               <button
                 onClick={handleAddTutorial}
-                className="flex-1 py-4 rounded-xl font-bold text-xl bg-teal-500 text-white hover:bg-teal-600 transition-colors"
+                className="flex-1 py-4 rounded-xl font-bold text-xl bg-teal-500 text-white hover:bg-teal-600 transition-colors min-h-[56px]"
               >
                 保存
               </button>

@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useState } from "react";
 import Home from "@/pages/Home";
 import Tutorials from "@/pages/Tutorials";
 import CategoryDetail from "@/pages/CategoryDetail";
@@ -7,10 +8,18 @@ import AntiFraud from "@/pages/AntiFraud";
 import AntiFraudDetail from "@/pages/AntiFraudDetail";
 import Helpers from "@/pages/Helpers";
 import Settings from "@/pages/Settings";
+import Onboarding from "@/components/Onboarding";
+import { useAppStore } from "@/store/appStore";
 
 export default function App() {
+  const { onboardingSeen } = useAppStore();
+  const [showOnboarding, setShowOnboarding] = useState(!onboardingSeen);
+
   return (
     <Router>
+      {showOnboarding && !onboardingSeen && (
+        <Onboarding onClose={() => setShowOnboarding(false)} />
+      )}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/tutorials" element={<Tutorials />} />

@@ -1,21 +1,32 @@
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Shield,
   CheckCircle,
-  Star,
-  Lock,
   ChevronRight,
   AlertTriangle,
-  Award,
+  Shield,
+  UserX,
+  Coins,
+  Link2Off,
+  HeartHandshake,
+  Users,
+  Flame,
 } from "lucide-react";
-import { scamQuestions } from "@/data/scams";
+import { scamQuestions, scamCategories, redWordExercises } from "@/data/scams";
 import { useAppStore } from "@/store/appStore";
 
-const difficultyConfig = {
-  easy: { label: "简单", color: "bg-green-500", textColor: "text-green-600", bgColor: "bg-green-50", borderColor: "border-green-200" },
-  medium: { label: "中等", color: "bg-yellow-500", textColor: "text-yellow-600", bgColor: "bg-yellow-50", borderColor: "border-yellow-200" },
-  hard: { label: "困难", color: "bg-red-500", textColor: "text-red-600", bgColor: "bg-red-50", borderColor: "border-red-200" },
+const iconMap: Record<string, React.ElementType> = {
+  "user-x": UserX,
+  coins: Coins,
+  "link-2-off": Link2Off,
+  "heart-handshake": HeartHandshake,
+  users: Users,
+};
+
+const dangerLevelConfig = {
+  high: { label: "高危", color: "bg-red-500", textColor: "text-red-600", bgColor: "bg-red-50", borderColor: "border-red-200" },
+  medium: { label: "中危", color: "bg-orange-500", textColor: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200" },
+  warn: { label: "警告", color: "bg-yellow-500", textColor: "text-yellow-600", bgColor: "bg-yellow-50", borderColor: "border-yellow-200" },
 };
 
 export default function AntiFraud() {
@@ -25,6 +36,7 @@ export default function AntiFraud() {
   const completedCount = progress.completedScamLevels.length;
   const totalCount = scamQuestions.length;
   const totalScore = Object.values(progress.scamScores).reduce((sum, score) => sum + score, 0);
+  const completionPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
@@ -53,9 +65,7 @@ export default function AntiFraud() {
               <div className="text-red-100 text-base">总积分</div>
             </div>
             <div>
-              <div className="text-3xl font-bold">
-                {totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%
-              </div>
+              <div className="text-3xl font-bold">{completionPct}%</div>
               <div className="text-red-100 text-base">完成度</div>
             </div>
           </div>
@@ -104,68 +114,95 @@ export default function AntiFraud() {
 
       <div className="px-4">
         <h2 className="text-xl font-bold text-gray-800 mb-4 px-1">
-          骗局闯关 ({totalCount} 关)
+          骗局分类训练
         </h2>
         <div className="space-y-4">
-          {scamQuestions.map((scam, index) => {
-            const isCompleted = progress.completedScamLevels.includes(scam.id);
-            const score = progress.scamScores[scam.id] || 0;
-            const difficulty = difficultyConfig[scam.difficulty];
-            const isLocked = index > 0 && !progress.completedScamLevels.includes(scamQuestions[index - 1].id);
+          {scamCategories.map((category) => {
+            const categoryQuestions = scamQuestions.filter((q) => q.categoryId === category.id);
+            const completedInCategory = categoryQuestions.filter((q) =>
+              progress.completedScamLevels.includes(q.id)
+            ).length;
+            const totalInCategory = categoryQuestions.length;
+            const IconComponent = iconMap[category.icon] || Shield;
 
             return (
               <button
-                key={scam.id}
-                onClick={() => !isLocked && navigate(`/anti-fraud/${scam.id}`)}
-                disabled={isLocked}
-                className={`w-full bg-white rounded-2xl p-5 text-left shadow-md transition-all ${
-                  isLocked
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:shadow-lg transform hover:scale-[1.01] active:scale-[0.99]"
-                }`}
+                key={category.id}
+                onClick={() => navigate(`/anti-fraud/${category.id}`)}
+                className="w-full bg-white rounded-2xl p-5 text-left shadow-md hover:shadow-lg transform hover:scale-[1.01] active:scale-[0.99] transition-all min-h-[60px]"
               >
                 <div className="flex items-center gap-4">
-                  <div className={`relative ${
-                    isCompleted ? "bg-green-500" : isLocked ? "bg-gray-300" : difficulty.color
-                  } text-white p-4 rounded-2xl`}>
-                    {isLocked ? (
-                      <Lock className="w-8 h-8" />
-                    ) : isCompleted ? (
-                      <CheckCircle className="w-8 h-8" />
-                    ) : (
-                      <Shield className="w-8 h-8" />
-                    )}
-                    <div className="absolute -top-2 -right-2 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow-md">
-                      <span className="text-sm font-bold text-gray-600">{index + 1}</span>
-                    </div>
+                  <div className={`${category.color} text-white p-4 rounded-2xl`}>
+                    <IconComponent className="w-8 h-8" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-xl font-bold text-gray-800">
-                        {scam.scenario}
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-semibold px-3 py-1 rounded-full ${difficulty.bgColor} ${difficulty.textColor}`}>
-                        {difficulty.label}
+                      <h3 className="text-xl font-bold text-gray-800">{category.name}</h3>
+                      <span className={`${category.color} text-white text-sm font-semibold px-3 py-1 rounded-full`}>
+                        {completedInCategory}/{totalInCategory}
                       </span>
-                      {isCompleted && (
-                        <div className="flex items-center gap-1 text-yellow-500">
-                          <Star className="w-5 h-5 fill-current" />
-                          <span className="font-bold text-base">{score}分</span>
-                        </div>
-                      )}
                     </div>
+                    <p className="text-gray-500 text-base">{category.description}</p>
+                    {totalInCategory > 0 && (
+                      <div className="mt-2 w-full bg-gray-100 rounded-full h-2">
+                        <div
+                          className={`${category.color} h-2 rounded-full transition-all`}
+                          style={{ width: `${(completedInCategory / totalInCategory) * 100}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {!isLocked && <ChevronRight className="w-7 h-7 text-gray-400" />}
+                  <ChevronRight className="w-7 h-7 text-gray-400 flex-shrink-0" />
                 </div>
               </button>
             );
           })}
         </div>
+      </div>
 
-        {completedCount === totalCount && (
-          <div className="mt-6 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl p-6 text-white text-center shadow-lg">
+      <div className="px-4 mt-6">
+        <div className="flex items-center gap-2 mb-4 px-1">
+          <Flame className="w-6 h-6 text-red-500" />
+          <h2 className="text-xl font-bold text-gray-800">反诈红线词专项练习</h2>
+        </div>
+        <div className="space-y-4">
+          {redWordExercises.map((rw) => {
+            const isCompleted = progress.completedRedWords.includes(rw.id);
+            const danger = dangerLevelConfig[rw.dangerLevel];
+
+            return (
+              <button
+                key={rw.id}
+                onClick={() => navigate(`/anti-fraud/${rw.id}`)}
+                className="w-full bg-white rounded-2xl p-5 text-left shadow-md hover:shadow-lg transform hover:scale-[1.01] active:scale-[0.99] transition-all min-h-[60px]"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`${danger.color} text-white p-3 rounded-2xl`}>
+                    <AlertTriangle className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-xl font-bold text-gray-800">{rw.word}</h3>
+                      <span className={`${danger.bgColor} ${danger.textColor} text-sm font-semibold px-3 py-1 rounded-full ${danger.borderColor} border`}>
+                        {danger.label}
+                      </span>
+                      {isCompleted && (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-gray-500 text-base">{rw.description}</p>
+                  </div>
+                  <ChevronRight className="w-7 h-7 text-gray-400 flex-shrink-0" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {completedCount === totalCount && (
+        <div className="px-4 mt-6">
+          <div className="bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl p-6 text-white text-center shadow-lg">
             <div className="text-5xl mb-3">🏆</div>
             <h3 className="text-2xl font-bold mb-2">反诈达人！</h3>
             <p className="text-green-100 text-lg">
@@ -175,11 +212,13 @@ export default function AntiFraud() {
               总积分：{totalScore} 分
             </p>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="mt-6 bg-blue-50 rounded-2xl p-5 border border-blue-100">
+      <div className="px-4 mt-6">
+        <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100">
           <div className="flex items-center gap-3 mb-3">
-            <Award className="w-6 h-6 text-blue-600" />
+            <Shield className="w-6 h-6 text-blue-600" />
             <h3 className="text-lg font-bold text-blue-800">温馨提示</h3>
           </div>
           <ul className="text-blue-700 text-lg space-y-2">

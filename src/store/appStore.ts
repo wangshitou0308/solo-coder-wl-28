@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { TutorialStep } from "@/data/tutorials";
 
 interface EmergencyContact {
   id: string;
@@ -15,41 +16,75 @@ interface HelperInfo {
   relationship: string;
 }
 
+interface CustomTutorialStep {
+  id: string;
+  title: string;
+  description: string;
+  image?: string;
+  whatIfStuck?: string;
+  whatIfWrong?: string;
+  howToConfirm?: string;
+}
+
+export interface CustomTutorial {
+  id: string;
+  title: string;
+  description: string;
+  categoryId: string;
+  steps: CustomTutorialStep[];
+  images?: string[];
+  createdAt: string;
+  isCustom: boolean;
+}
+
 interface UserProgress {
   completedTutorials: string[];
   currentTutorial: string | null;
   currentStep: number;
   scamScores: Record<string, number>;
   completedScamLevels: string[];
+  completedRedWords: string[];
   totalStudyMinutes: number;
   lastStudyDate: string | null;
   streakDays: number;
 }
 
+export type VoiceSpeed = "slow" | "normal" | "fast";
+
 interface AppState {
   fontSize: "normal" | "large" | "xlarge";
   voiceEnabled: boolean;
+  voiceSpeed: VoiceSpeed;
+  voiceRepeat: boolean;
+  voiceReadStepOnly: boolean;
+  onboardingSeen: boolean;
   emergencyContacts: EmergencyContact[];
   helpers: HelperInfo[];
-  customTutorials: Array<{
-    id: string;
-    title: string;
-    description: string;
-    content: string;
-    createdAt: string;
-  }>;
+  customTutorials: CustomTutorial[];
   progress: UserProgress;
+
   setFontSize: (size: "normal" | "large" | "xlarge") => void;
   toggleVoice: () => void;
+  setVoiceSpeed: (speed: VoiceSpeed) => void;
+  setVoiceRepeat: (repeat: boolean) => void;
+  setVoiceReadStepOnly: (only: boolean) => void;
+  setOnboardingSeen: (seen: boolean) => void;
+
   addEmergencyContact: (contact: Omit<EmergencyContact, "id">) => void;
   removeEmergencyContact: (id: string) => void;
+
   addHelper: (helper: Omit<HelperInfo, "id">) => void;
   removeHelper: (id: string) => void;
-  completeTutorial: (tutorialId: string) => void;
+
+  addCustomTutorial: (tutorial: Omit<CustomTutorial, "id" | "createdAt" | "isCustom">) => void;
+  removeCustomTutorial: (id: string) => void;
+
   setCurrentTutorial: (tutorialId: string | null, step?: number) => void;
+  completeTutorial: (tutorialId: string) => void;
   addStudyMinutes: (minutes: number) => void;
+
   completeScamLevel: (scamId: string, score: number) => void;
-  addCustomTutorial: (tutorial: { title: string; description: string; content: string }) => void;
+  completeRedWord: (redWordId: string) => void;
 }
 
 const initialProgress: UserProgress = {
@@ -58,36 +93,40 @@ const initialProgress: UserProgress = {
   currentStep: 0,
   scamScores: {},
   completedScamLevels: [],
+  completedRedWords: [],
   totalStudyMinutes: 0,
   lastStudyDate: null,
   streakDays: 0,
 };
 
-const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       fontSize: "large",
       voiceEnabled: true,
-      emergencyContacts: [
-        { id: generateId(), name: "儿子", phone: "13800138000", relationship: "儿子" },
-        { id: generateId(), name: "女儿", phone: "13900139000", relationship: "女儿" },
-      ],
+      voiceSpeed: "normal",
+      voiceRepeat: false,
+      voiceReadStepOnly: false,
+      onboardingSeen: false,
+      emergencyContacts: [],
       helpers: [],
       customTutorials: [],
       progress: initialProgress,
 
       setFontSize: (size) => set({ fontSize: size }),
-
-      toggleVoice: () =>
-        set((state) => ({ voiceEnabled: !state.voiceEnabled })),
+      toggleVoice: () => set({ voiceEnabled: !get().voiceEnabled }),
+      setVoiceSpeed: (speed) => set({ voiceSpeed: speed }),
+      setVoiceRepeat: (repeat) => set({ voiceRepeat: repeat }),
+      setVoiceReadStepOnly: (only) => set({ voiceReadStepOnly: only }),
+      setOnboardingSeen: (seen) => set({ onboardingSeen: seen }),
 
       addEmergencyContact: (contact) =>
         set((state) => ({
-          emergencyContacts: [...state.emergencyContacts, { id: generateId(), ...contact }],
+          emergencyContacts: [
+            ...state.emergencyContacts,
+            { ...contact, id: Date.now().toString() },
+          ],
         })),
-
       removeEmergencyContact: (id) =>
         set((state) => ({
           emergencyContacts: state.emergencyContacts.filter((c) => c.id !== id),
@@ -95,34 +134,29 @@ export const useAppStore = create<AppState>()(
 
       addHelper: (helper) =>
         set((state) => ({
-          helpers: [...state.helpers, { id: generateId(), ...helper }],
+          helpers: [...state.helpers, { ...helper, id: Date.now().toString() }],
         })),
-
       removeHelper: (id) =>
         set((state) => ({
           helpers: state.helpers.filter((h) => h.id !== id),
         })),
 
-      completeTutorial: (tutorialId) =>
-        set((state) => {
-          if (state.progress.completedTutorials.includes(tutorialId)) {
-            return state;
-          }
-          const today = new Date().toISOString().split("T")[0];
-          const isNewDay = state.progress.lastStudyDate !== today;
-          const newStreak = isNewDay ? state.progress.streakDays + 1 : state.progress.streakDays;
-          
-          return {
-            progress: {
-              ...state.progress,
-              completedTutorials: [...state.progress.completedTutorials, tutorialId],
-              currentTutorial: null,
-              currentStep: 0,
-              lastStudyDate: today,
-              streakDays: newStreak,
+      addCustomTutorial: (tutorial) =>
+        set((state) => ({
+          customTutorials: [
+            ...state.customTutorials,
+            {
+              ...tutorial,
+              id: `custom-${Date.now()}`,
+              createdAt: new Date().toISOString(),
+              isCustom: true,
             },
-          };
-        }),
+          ],
+        })),
+      removeCustomTutorial: (id) =>
+        set((state) => ({
+          customTutorials: state.customTutorials.filter((t) => t.id !== id),
+        })),
 
       setCurrentTutorial: (tutorialId, step = 0) =>
         set((state) => ({
@@ -133,46 +167,69 @@ export const useAppStore = create<AppState>()(
           },
         })),
 
-      addStudyMinutes: (minutes) =>
-        set((state) => ({
-          progress: {
-            ...state.progress,
-            totalStudyMinutes: state.progress.totalStudyMinutes + minutes,
-          },
-        })),
-
-      completeScamLevel: (scamId, score) =>
+      completeTutorial: (tutorialId) =>
         set((state) => {
-          const today = new Date().toISOString().split("T")[0];
-          const isNewDay = state.progress.lastStudyDate !== today;
-          const newStreak = isNewDay ? state.progress.streakDays + 1 : state.progress.streakDays;
+          if (state.progress.completedTutorials.includes(tutorialId)) {
+            return state;
+          }
+          return {
+            progress: {
+              ...state.progress,
+              completedTutorials: [...state.progress.completedTutorials, tutorialId],
+              currentTutorial: null,
+              currentStep: 0,
+            },
+          };
+        }),
+
+      addStudyMinutes: (minutes) =>
+        set((state) => {
+          const today = new Date().toDateString();
+          const lastDate = state.progress.lastStudyDate;
+          let newStreak = state.progress.streakDays;
+
+          if (lastDate !== today) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (lastDate === yesterday.toDateString()) {
+              newStreak += 1;
+            } else if (lastDate !== today) {
+              newStreak = 1;
+            }
+          }
 
           return {
             progress: {
               ...state.progress,
-              scamScores: {
-                ...state.progress.scamScores,
-                [scamId]: Math.max(state.progress.scamScores[scamId] || 0, score),
-              },
-              completedScamLevels: state.progress.completedScamLevels.includes(scamId)
-                ? state.progress.completedScamLevels
-                : [...state.progress.completedScamLevels, scamId],
+              totalStudyMinutes: state.progress.totalStudyMinutes + minutes,
               lastStudyDate: today,
               streakDays: newStreak,
             },
           };
         }),
 
-      addCustomTutorial: (tutorial) =>
+      completeScamLevel: (scamId, score) =>
         set((state) => ({
-          customTutorials: [
-            ...state.customTutorials,
-            {
-              id: `custom-${Date.now()}`,
-              ...tutorial,
-              createdAt: new Date().toISOString(),
+          progress: {
+            ...state.progress,
+            scamScores: {
+              ...state.progress.scamScores,
+              [scamId]: Math.max(state.progress.scamScores[scamId] || 0, score),
             },
-          ],
+            completedScamLevels: state.progress.completedScamLevels.includes(scamId)
+              ? state.progress.completedScamLevels
+              : [...state.progress.completedScamLevels, scamId],
+          },
+        })),
+
+      completeRedWord: (redWordId) =>
+        set((state) => ({
+          progress: {
+            ...state.progress,
+            completedRedWords: state.progress.completedRedWords.includes(redWordId)
+              ? state.progress.completedRedWords
+              : [...state.progress.completedRedWords, redWordId],
+          },
         })),
     }),
     {
@@ -180,14 +237,3 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
-
-export const getFontSizeClass = (size: "normal" | "large" | "xlarge") => {
-  switch (size) {
-    case "normal":
-      return "text-base";
-    case "large":
-      return "text-lg";
-    case "xlarge":
-      return "text-xl";
-  }
-};
