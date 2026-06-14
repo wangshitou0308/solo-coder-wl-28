@@ -14,7 +14,11 @@ export function useVoice() {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const segmentsRef = useRef<string[]>([]);
   const segmentIndexRef = useRef(0);
-  const repeatRef = useRef(false);
+  const repeatRef = useRef(voiceRepeat);
+
+  useEffect(() => {
+    repeatRef.current = voiceRepeat;
+  }, [voiceRepeat]);
 
   const stop = useCallback(() => {
     window.speechSynthesis?.cancel();

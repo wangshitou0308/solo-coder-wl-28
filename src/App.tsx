@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Home from "@/pages/Home";
 import Tutorials from "@/pages/Tutorials";
 import CategoryDetail from "@/pages/CategoryDetail";
@@ -15,9 +15,15 @@ export default function App() {
   const { onboardingSeen } = useAppStore();
   const [showOnboarding, setShowOnboarding] = useState(!onboardingSeen);
 
+  useEffect(() => {
+    if (!onboardingSeen) {
+      setShowOnboarding(true);
+    }
+  }, [onboardingSeen]);
+
   return (
     <Router>
-      {showOnboarding && !onboardingSeen && (
+      {showOnboarding && (
         <Onboarding onClose={() => setShowOnboarding(false)} />
       )}
       <Routes>
